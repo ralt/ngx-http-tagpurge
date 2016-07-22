@@ -22,7 +22,7 @@ $(NGINX_FOLDER)/.configured: $(NGINX_FOLDER)
 		--conf-path=conf/nginx.conf \
 		--error-log-path=logs/error.log \
 		--http-log-path=logs/access.log \
-		--add-dynamic-module=../..
+		--add-module=../..
 	touch $@
 
 $(NGINX_FOLDER): vendor
@@ -33,3 +33,8 @@ $(NGINX_FOLDER): vendor
 
 vendor:
 	mkdir -p vendor
+
+.PHONY: tests
+
+tests:
+	sbcl --load tests/basic.lisp --quit
