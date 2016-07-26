@@ -1,10 +1,7 @@
-#include "ddebug.h"
-
 #include <nginx.h>
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
-#include <stdio.h>
 
 ngx_module_t ngx_http_tagpurge_module;
 
