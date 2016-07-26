@@ -40,8 +40,8 @@
     ;; Make sure we're getting our custom header
     (is (drakma:header-value :foo headers) "bar")
     ;; Make sure we're getting nginx custom tagpurge header
-    (is (drakma:header-value :X-Nginx-Tutorial headers)
-        "Hello World!")))
+    (is (drakma:header-value :X-foo headers)
+        "bar")))
 
 (run! :basic)
 (uiop:run-program "build/nginx/sbin/nginx -s stop")
