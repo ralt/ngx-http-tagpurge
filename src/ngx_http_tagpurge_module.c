@@ -8,6 +8,7 @@ ngx_module_t ngx_http_tagpurge_module;
 typedef struct
 {
 	ngx_str_t cache_tag_header;
+	ngx_path_t *cache_path;
 } ngx_http_tagpurge_main_conf_t;
 
 static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
@@ -131,12 +132,48 @@ ngx_http_tagpurge_init_main_conf(ngx_conf_t *cf, void *conf)
 	return NGX_CONF_OK;
 }
 
+char *
+ngx_http_tagpurge_cache_path_set_slot(ngx_conf_t *cf, ngx_command_t *cmd,
+				      void *conf)
+{
+	ngx_http_tagpurge_main_conf_t *confp;
+	confp = conf;
+
+	confp->cache_path = ngx_palloc(cf->pool,
+				      sizeof(ngx_path_t));
+	if (confp->cache_path == NULL) {
+		return NGX_CONF_ERROR;
+	}
+
+	ngx_str_t *value;
+	value = cf->args->elts;
+
+	confp->cache_path->name = value[1];
+	if (confp->cache_path->name.data[confp->cache_path->name.len - 1] == '/') {
+		/* Remove trailing slash if there. */
+		confp->cache_path->name.len--;
+	}
+
+	if (ngx_add_path(cf, &confp->cache_path) != NGX_OK) {
+		return NGX_CONF_ERROR;
+	}
+
+	return NGX_CONF_OK;
+}
+
 static ngx_command_t ngx_http_tagpurge_commands[] = {
 	{ ngx_string("tagpurge_cache_tag_header"),
 	  NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
 	  ngx_conf_set_str_slot,
 	  NGX_HTTP_MAIN_CONF_OFFSET,
 	  offsetof(ngx_http_tagpurge_main_conf_t, cache_tag_header),
+	  NULL},
+
+	{ ngx_string("tagpurge_cache_path"),
+	  NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+	  ngx_http_tagpurge_cache_path_set_slot,
+	  NGX_HTTP_MAIN_CONF_OFFSET,
+	  0,
 	  NULL},
 
 	ngx_null_command
