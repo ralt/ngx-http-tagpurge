@@ -13,7 +13,7 @@
 (in-suite :basic)
 
 (hunchentoot:define-easy-handler (home :uri "/") ()
-  (setf (hunchentoot:header-out "foo") "bar")
+  (setf (hunchentoot:header-out "cache-Tag") "bar")
   "Hello")
 
 (bordeaux-threads:make-thread
@@ -38,7 +38,7 @@
     (declare (ignore response status))
     (format t "~A~%" headers)
     ;; Make sure we're getting our custom header
-    (is (drakma:header-value :foo headers) "bar")
+    (is (drakma:header-value :cache-tag headers) "bar")
     ;; Make sure we're getting nginx custom tagpurge header
     (is (drakma:header-value :X-foo headers)
         "bar")))

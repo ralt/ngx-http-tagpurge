@@ -5,6 +5,11 @@
 
 ngx_module_t ngx_http_tagpurge_module;
 
+typedef struct
+{
+	ngx_str_t cache_tag_header;
+} ngx_http_tagpurge_main_conf_t;
+
 static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
 
 /*
@@ -65,16 +70,16 @@ search_headers_out(ngx_http_request_t *r, u_char *name, size_t len) {
 static ngx_int_t
 ngx_http_tagpurge_filter(ngx_http_request_t *r)
 {
-	u_char* upstream_header_name = ngx_palloc(r->pool, 3);
-	upstream_header_name[0] = 'f';
-	upstream_header_name[1] = 'o';
-	upstream_header_name[2] = 'o';
+	ngx_http_tagpurge_main_conf_t *hmcf;
+
+	hmcf = ngx_http_get_module_main_conf(r,
+					     ngx_http_tagpurge_module);
 
 	ngx_table_elt_t *upstream_header;
 	upstream_header = search_headers_out(
 		r,
-		upstream_header_name,
-		3);
+		hmcf->cache_tag_header.data,
+		hmcf->cache_tag_header.len);
 	if (upstream_header == NULL) {
 		return ngx_http_next_header_filter(r);
 	}
@@ -101,11 +106,34 @@ ngx_http_tagpurge_init(ngx_conf_t *cf)
 	return NGX_OK;
 }
 
+static void *
+ngx_http_tagpurge_create_main_conf(ngx_conf_t *cf)
+{
+	ngx_http_tagpurge_main_conf_t *hmcf;
+
+	hmcf = ngx_palloc(cf->pool, sizeof(ngx_http_tagpurge_main_conf_t));
+	if (hmcf == NULL) {
+		return NULL;
+	}
+
+	return hmcf;
+}
+
+static ngx_command_t ngx_http_tagpurge_commands[] = {
+	{ ngx_string("tagpurge_cache_tag_header"),
+	  NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+	  ngx_conf_set_str_slot,
+	  NGX_HTTP_MAIN_CONF_OFFSET,
+	  offsetof(ngx_http_tagpurge_main_conf_t, cache_tag_header),
+	  NULL},
+
+	ngx_null_command
+};
 
 static ngx_http_module_t ngx_http_tagpurge_module_ctx = {
 	NULL,			/* preconfiguration */
 	ngx_http_tagpurge_init, /* postconfiguration */
-	NULL,                   /* create main configuration */
+	ngx_http_tagpurge_create_main_conf, /* create main configuration */
 	NULL,                   /* init main configuration */
 	NULL,                   /* create server configuration */
 	NULL,                   /* merge server configuration */
@@ -116,7 +144,7 @@ static ngx_http_module_t ngx_http_tagpurge_module_ctx = {
 ngx_module_t ngx_http_tagpurge_module = {
 	NGX_MODULE_V1,
 	&ngx_http_tagpurge_module_ctx,	/* module context */
-	NULL,				/* module directives */
+	ngx_http_tagpurge_commands,	/* module directives */
 	NGX_HTTP_MODULE,		/* module type */
 	NULL,				/* init master */
 	NULL,				/* init module */
