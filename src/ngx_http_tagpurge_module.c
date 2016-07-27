@@ -119,6 +119,18 @@ ngx_http_tagpurge_create_main_conf(ngx_conf_t *cf)
 	return hmcf;
 }
 
+static char *
+ngx_http_tagpurge_init_main_conf(ngx_conf_t *cf, void *conf)
+{
+	ngx_http_tagpurge_main_conf_t *hmcf = conf;
+
+	if (hmcf->cache_tag_header.len == 0) {
+		hmcf->cache_tag_header = (ngx_str_t) ngx_string("cache-tag");
+	}
+
+	return NGX_CONF_OK;
+}
+
 static ngx_command_t ngx_http_tagpurge_commands[] = {
 	{ ngx_string("tagpurge_cache_tag_header"),
 	  NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
@@ -134,7 +146,7 @@ static ngx_http_module_t ngx_http_tagpurge_module_ctx = {
 	NULL,			/* preconfiguration */
 	ngx_http_tagpurge_init, /* postconfiguration */
 	ngx_http_tagpurge_create_main_conf, /* create main configuration */
-	NULL,                   /* init main configuration */
+	ngx_http_tagpurge_init_main_conf, /* init main configuration */
 	NULL,                   /* create server configuration */
 	NULL,                   /* merge server configuration */
 	NULL,                   /* create location configuration */
