@@ -85,16 +85,75 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		return ngx_http_next_header_filter(r);
 	}
 
-	ngx_table_elt_t *new_header;
-	new_header = ngx_list_push(&r->headers_out.headers);
-	if (new_header == NULL) {
+	/* At this point, we need to get the list of tags.
+	   Once that is gotten, for each tag, get the matching
+	   tag file and put the cache key in it, if it doesn't
+	   already exist in it. */
+	/* For now, assume only one tag. */
+	ngx_str_t tag = upstream_header->value;
+
+	ngx_file_t *file;
+	file = ngx_palloc(r->pool, sizeof(ngx_file_t));
+	if (file == NULL) {
 		return NGX_ERROR;
 	}
-	new_header->hash = 1;
 
-	ngx_str_set(&new_header->key, "X-Foo");
-	ngx_str_set(&new_header->value, upstream_header->value.data);
+	file->name.len = hmcf->cache_path->name.len + 1 +
+		hmcf->cache_path->len + 10;
 
+	file->name.data = ngx_palloc(r->pool, file->name.len + 1);
+	if (file->name.data == NULL) {
+		return NGX_ERROR;
+	}
+
+	ngx_memcpy(file->name.data,
+		   hmcf->cache_path->name.data,
+		   hmcf->cache_path->name.len);
+
+	(void) ngx_sprintf(file->name.data +
+			   hmcf->cache_path->name.len + 1 +
+			   hmcf->cache_path->len,
+			   "%s", tag.data);
+
+	ngx_create_hashed_filename(hmcf->cache_path,
+				   file->name.data,
+				   file->name.len);
+
+	if (ngx_create_path(file, hmcf->cache_path) != NGX_OK) {
+		return NGX_ERROR;
+	}
+
+	file->fd = ngx_open_file(file->name.data,
+				 NGX_FILE_RDWR,
+				 NGX_FILE_CREATE_OR_OPEN,
+				 NGX_FILE_DEFAULT_ACCESS);
+
+	if (file->fd == NGX_INVALID_FILE) {
+		goto end;
+	}
+
+	ssize_t n;
+	for (;;) {
+		n = ngx_write_fd(file->fd, tag.data, tag.len);
+		if (n == -1 ){
+			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
+				      ngx_errno,
+				      ngx_write_fd_n " \"%s\" failed",
+				      file->name.data);
+			goto close;
+		}
+
+		if ((size_t) n == tag.len) {
+			break;
+		}
+	}
+
+close:
+	if (ngx_close_file(file->fd) == NGX_FILE_ERROR) {
+		goto end;
+	}
+
+end:
 	return ngx_http_next_header_filter(r);
 }
 
