@@ -39,9 +39,7 @@
     (format t "~A~%" headers)
     ;; Make sure we're getting our custom header
     (is (drakma:header-value :cache-tag headers) "bar")
-    ;; Make sure we're getting nginx custom tagpurge header
-    (is (drakma:header-value :X-foo headers)
-        "bar")))
+    (is-true (probe-file "build/tagpurge/bar"))))
 
 (run! :basic)
 (uiop:run-program "build/nginx/sbin/nginx -s stop")

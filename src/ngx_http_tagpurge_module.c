@@ -3,6 +3,8 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#define log(...) ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, __VA_ARGS__);
+
 ngx_module_t ngx_http_tagpurge_module;
 
 typedef struct
@@ -92,6 +94,11 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 	/* For now, assume only one tag. */
 	ngx_str_t tag = upstream_header->value;
 
+	if (r->cache == NULL) {
+		/* Cache disabled. */
+		return ngx_http_next_header_filter(r);
+	}
+
 	ngx_file_t *file;
 	file = ngx_palloc(r->pool, sizeof(ngx_file_t));
 	if (file == NULL) {
@@ -99,7 +106,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 	}
 
 	file->name.len = hmcf->cache_path->name.len + 1 +
-		hmcf->cache_path->len + 10;
+		hmcf->cache_path->len + tag.len;
 
 	file->name.data = ngx_palloc(r->pool, file->name.len + 1);
 	if (file->name.data == NULL) {
@@ -111,13 +118,8 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		   hmcf->cache_path->name.len);
 
 	(void) ngx_sprintf(file->name.data +
-			   hmcf->cache_path->name.len + 1 +
-			   hmcf->cache_path->len,
-			   "%s", tag.data);
-
-	ngx_create_hashed_filename(hmcf->cache_path,
-				   file->name.data,
-				   file->name.len);
+			   hmcf->cache_path->name.len,
+			   "/%s", tag.data);
 
 	if (ngx_create_path(file, hmcf->cache_path) != NGX_OK) {
 		return NGX_ERROR;
@@ -132,9 +134,9 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		goto end;
 	}
 
-	ssize_t n;
+	ssize_t n = 0;
 	for (;;) {
-		n = ngx_write_fd(file->fd, tag.data, tag.len);
+		n += ngx_write_fd(file->fd, r->cache->key, ngx_strlen(r->cache->key));
 		if (n == -1 ){
 			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
 				      ngx_errno,
@@ -143,7 +145,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 			goto close;
 		}
 
-		if ((size_t) n == tag.len) {
+		if ((size_t) n == ngx_strlen(r->cache->key)) {
 			break;
 		}
 	}
