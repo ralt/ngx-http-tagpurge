@@ -13,10 +13,10 @@ An nginx module to provide tag-based cache purging.
    this, and on the proxy cache configuration, the cache file path for
    the response is guessed.
 
-3. Put the cache file path is a per-tag file, stored in the folder
+3. Put the cache file path in a per-tag file, stored in the folder
    configured in `tagpurge_cache_path`.
 
-4. Keep putting new cache file paths in the per-tag file, without
+4. Keep putting new cache file paths in the per-tag files, without
    duplicates.
 
 5. An HTTP API listens for tags to purge. When a tag is purged, all
