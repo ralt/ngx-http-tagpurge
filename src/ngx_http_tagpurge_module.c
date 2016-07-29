@@ -164,6 +164,37 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 	file->name.data[file->name.len] = '\0';
 
+	u_char *cache_key;
+	size_t cache_key_len = cache->path->name.len + 1 +
+		cache->path->len +
+		2 * NGX_HTTP_CACHE_KEY_LEN + 1;
+
+	cache_key = ngx_palloc(r->pool, cache_key_len);
+	if (cache_key == NULL) {
+		return NGX_ERROR;
+	}
+
+	ngx_memcpy(cache_key,
+		   cache->path->name.data,
+		   cache->path->name.len);
+
+	u_char *p;
+	p = cache_key + cache->path->name.len + 1 +
+		cache->path->len;
+	p = ngx_hex_dump(p,
+			 r->cache->key,
+			 NGX_HTTP_CACHE_KEY_LEN);
+	*p = '\0';
+
+	ngx_create_hashed_filename(cache->path,
+				   cache_key,
+				   cache_key_len - 1);
+
+	/* The NUL byte isn't needed anymore, replace it
+	   with a newline. */
+	cache_key[cache_key_len - 1] = '\n';
+
+	/* Everything is ready to write the cache key to the file. */
 	file->fd = ngx_open_file(file->name.data,
 				 NGX_FILE_RDWR,
 				 NGX_FILE_CREATE_OR_OPEN,
@@ -175,36 +206,6 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 	ssize_t n = 0;
 	for (;;) {
-		u_char *cache_key;
-		size_t cache_key_len = cache->path->name.len + 1 +
-			cache->path->len +
-			2 * NGX_HTTP_CACHE_KEY_LEN + 1;
-
-		cache_key = ngx_palloc(r->pool, cache_key_len);
-		if (cache_key == NULL) {
-			return NGX_ERROR;
-		}
-
-		ngx_memcpy(cache_key,
-			   cache->path->name.data,
-			   cache->path->name.len);
-
-		u_char *p;
-		p = cache_key + cache->path->name.len + 1 +
-			cache->path->len;
-		p = ngx_hex_dump(p,
-				 r->cache->key,
-				 NGX_HTTP_CACHE_KEY_LEN);
-		*p = '\0';
-
-		ngx_create_hashed_filename(cache->path,
-					   cache_key,
-					   cache_key_len - 1);
-
-		/* The NUL byte isn't needed anymore, replace it
-		   with a newline. */
-		cache_key[cache_key_len - 1] = '\n';
-
 		n += ngx_write_fd(file->fd,
 				  cache_key,
 				  cache_key_len);
