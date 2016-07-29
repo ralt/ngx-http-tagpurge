@@ -16,6 +16,10 @@
   (setf (hunchentoot:header-out "cache-Tag") "bar")
   "Hello")
 
+(hunchentoot:define-easy-handler (foo :uri "/foo") ()
+  (setf (hunchentoot:header-out "cache-tag") "foo")
+  "Foo")
+
 (bordeaux-threads:make-thread
  (lambda ()
    (format t "Starting hunchentoot~%")
@@ -37,9 +41,12 @@
       (drakma:http-request *url*)
     (declare (ignore response status))
     (format t "~A~%" headers)
-    ;; Make sure we're getting our custom header
     (is (drakma:header-value :cache-tag headers) "bar")
-    (is-true (probe-file "build/tagpurge/bar"))))
+    (is-true (probe-file "build/tagpurge/bar")))
+  (multiple-value-bind (response status headers)
+      (drakma:http-request "http://localhost:8888/foo")
+    (declare (ignore response status))
+    (is (drakma:header-value :cache-tag headers) "foo")))
 
 (run! :basic)
 (uiop:run-program "build/nginx/sbin/nginx -s stop")

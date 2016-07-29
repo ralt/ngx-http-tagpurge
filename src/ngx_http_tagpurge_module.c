@@ -93,11 +93,20 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 	   already exist in it. */
 	/* For now, assume only one tag. */
 	ngx_str_t tag = upstream_header->value;
+	u_char *cache_key;
 
 	if (r->cache == NULL) {
 		/* Cache disabled. */
 		return ngx_http_next_header_filter(r);
 	}
+
+	cache_key = ngx_palloc(r->pool, 32 + 1);
+	if (cache_key == NULL) {
+		return NGX_ERROR;
+	}
+
+	ngx_hex_dump(cache_key, r->cache->key, 32);
+	cache_key[32] = '\0';
 
 	ngx_file_t *file;
 	file = ngx_palloc(r->pool, sizeof(ngx_file_t));
@@ -105,8 +114,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		return NGX_ERROR;
 	}
 
-	file->name.len = hmcf->cache_path->name.len + 1 +
-		hmcf->cache_path->len + tag.len;
+	file->name.len = hmcf->cache_path->name.len + 1 + tag.len;
 
 	file->name.data = ngx_palloc(r->pool, file->name.len + 1);
 	if (file->name.data == NULL) {
@@ -136,7 +144,15 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 
 	ssize_t n = 0;
 	for (;;) {
-		n += ngx_write_fd(file->fd, r->cache->key, ngx_strlen(r->cache->key));
+		u_char *cache_key_line;
+		/* size of cache key + 1 for the newline. */
+		cache_key_line = ngx_palloc(r->pool, 32 + 1);
+		if (cache_key_line == NULL) {
+			return NGX_ERROR;
+		}
+		(void) ngx_sprintf(cache_key_line, "%s\n", cache_key);
+
+		n += ngx_write_fd(file->fd, cache_key_line, 32 + 1);
 		if (n == -1 ){
 			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
 				      ngx_errno,
@@ -145,7 +161,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 			goto close;
 		}
 
-		if ((size_t) n == ngx_strlen(r->cache->key)) {
+		if ((size_t) n == 32 + 1) {
 			break;
 		}
 	}
