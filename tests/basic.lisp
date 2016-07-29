@@ -2,6 +2,7 @@
 (ql:quickload "drakma")
 (ql:quickload "hunchentoot")
 (ql:quickload "bordeaux-threads")
+(ql:quickload "djula")
 
 (defpackage #:ngx-tagpurge-tests
   (:use #:cl #:5am))
@@ -34,6 +35,25 @@
 (reset-directory (merge-pathnames "build/nginx/cache/" (uiop:getcwd)))
 (reset-directory (merge-pathnames "build/tagpurge/" (uiop:getcwd)))
 
+(djula:add-template-directory "tests/")
+(defparameter +nginx.conf+ (djula:compile-template* "nginx.conf"))
+
+(defun write-nginx-conf (conf-dir conf)
+  (let ((nginx-conf (merge-pathnames "nginx.conf" conf-dir)))
+    (when (probe-file nginx-conf)
+      (delete-file nginx-conf))
+    (with-open-file (s nginx-conf
+                       :direction :output
+                       :if-does-not-exist :create
+                       :if-exists :overwrite)
+      (let ((template (djula:compile-template* conf)))
+        (djula:render-template* template s
+                                :pwd (uiop:getcwd))))))
+
+(write-nginx-conf
+ (merge-pathnames "build/nginx/conf/" (uiop:getcwd))
+ (merge-pathnames "tests/nginx.conf" (uiop:getcwd)))
+
 (uiop:run-program "build/nginx/sbin/nginx")
 (format t "nginx started~%")
 
@@ -57,7 +77,10 @@
     (format t "~A~%" headers)
     (is (drakma:header-value :cache-tag headers) "foo baz")
     (is-true (probe-file "build/tagpurge/foo"))
-    (is-true (probe-file "build/tagpurge/baz"))))
+    (is-true (probe-file "build/tagpurge/baz"))
+    (is (uiop:read-file-string "build/tagpurge/foo")
+        (uiop:read-file-string "build/tagpurge/baz"))
+    (is-true (probe-file (uiop:read-file-line "build/tagpurge/foo")))))
 
 (run! :basic)
 (uiop:run-program "build/nginx/sbin/nginx -s stop")

@@ -9,8 +9,6 @@ build/nginx/sbin/nginx: $(NGINX_FOLDER)/.configured $(SOURCES) build/nginx
 	make -j16 && \
 	make install
 
-	ln -sfn $(PWD)/nginx.conf build/nginx/conf/nginx.conf
-
 build/nginx:
 	mkdir -p build/nginx/conf build/nginx/logs
 

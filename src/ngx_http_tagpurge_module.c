@@ -176,10 +176,9 @@ write_cache_tag_key(ngx_http_request_t *r,
 	ssize_t n = 0;
 	for (;;) {
 		u_char *cache_key;
-		/* +1 for newline and +1 for nul byte. */
 		size_t cache_key_len = cache->path->name.len + 1 +
 			cache->path->len +
-			2 * NGX_HTTP_CACHE_KEY_LEN + 1 + 1;
+			2 * NGX_HTTP_CACHE_KEY_LEN + 1;
 
 		cache_key = ngx_palloc(r->pool, cache_key_len);
 		if (cache_key == NULL) {
@@ -200,8 +199,10 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 		ngx_create_hashed_filename(cache->path,
 					   cache_key,
-					   cache_key_len - 2);
+					   cache_key_len - 1);
 
+		/* The NUL byte isn't needed anymore, replace it
+		   with a newline. */
 		cache_key[cache_key_len - 1] = '\n';
 
 		n += ngx_write_fd(file->fd,
