@@ -139,7 +139,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 				 NGX_FILE_DEFAULT_ACCESS);
 
 	if (file->fd == NGX_INVALID_FILE) {
-		goto end;
+		return NGX_ERROR;
 	}
 
 	ssize_t n = 0;
@@ -158,7 +158,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 				      ngx_errno,
 				      ngx_write_fd_n " \"%s\" failed",
 				      file->name.data);
-			goto close;
+			return NGX_ERROR;
 		}
 
 		if ((size_t) n == 32 + 1) {
@@ -166,12 +166,10 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		}
 	}
 
-close:
 	if (ngx_close_file(file->fd) == NGX_FILE_ERROR) {
-		goto end;
+		return NGX_ERROR;
 	}
 
-end:
 	return ngx_http_next_header_filter(r);
 }
 
