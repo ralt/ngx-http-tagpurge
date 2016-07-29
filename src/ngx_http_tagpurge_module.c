@@ -204,11 +204,13 @@ write_cache_tag_key(ngx_http_request_t *r,
 		return NGX_ERROR;
 	}
 
-	ssize_t n = 0;
+	ssize_t n;
+	size_t written = 0;
+
 	for (;;) {
-		n += ngx_write_fd(file->fd,
-				  cache_key,
-				  cache_key_len);
+		n = ngx_write_fd(file->fd,
+				 cache_key,
+				 cache_key_len);
 		if (n == -1 ){
 			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
 				      ngx_errno,
@@ -217,7 +219,9 @@ write_cache_tag_key(ngx_http_request_t *r,
 			return NGX_ERROR;
 		}
 
-		if ((size_t) n == cache_key_len) {
+		written += n;
+
+		if (written == cache_key_len) {
 			break;
 		}
 	}
