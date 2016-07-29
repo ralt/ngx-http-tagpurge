@@ -27,7 +27,8 @@
     (make-instance 'hunchentoot:easy-acceptor :port 9999))))
 
 (defun reset-directory (dir)
-  (uiop:delete-directory-tree dir :validate t)
+  (when (probe-file dir)
+    (uiop:delete-directory-tree dir :validate t))
   (ensure-directories-exist dir))
 
 (reset-directory (merge-pathnames "build/nginx/cache/" (uiop:getcwd)))
