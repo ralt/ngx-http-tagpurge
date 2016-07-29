@@ -14,6 +14,11 @@ typedef struct
 } ngx_http_tagpurge_main_conf_t;
 
 static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
+static ngx_int_t
+write_cache_tag_key(ngx_http_request_t *r,
+		    ngx_http_tagpurge_main_conf_t *hmcf,
+		    u_char *tag,
+		    size_t tag_len);
 
 /*
   Taken on: https://www.nginx.com/resources/wiki/start/topics/examples/headers_management/
@@ -73,6 +78,11 @@ search_headers_out(ngx_http_request_t *r, u_char *name, size_t len) {
 static ngx_int_t
 ngx_http_tagpurge_filter(ngx_http_request_t *r)
 {
+	if (r->cache == NULL) {
+		/* Cache disabled. */
+		return ngx_http_next_header_filter(r);
+	}
+
 	ngx_http_tagpurge_main_conf_t *hmcf;
 
 	hmcf = ngx_http_get_module_main_conf(r,
@@ -91,14 +101,34 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 	   Once that is gotten, for each tag, get the matching
 	   tag file and put the cache key in it, if it doesn't
 	   already exist in it. */
-	/* For now, assume only one tag. */
-	ngx_str_t tag = upstream_header->value;
-	u_char *cache_key;
+	ngx_str_t ngx_tags = upstream_header->value;
 
-	if (r->cache == NULL) {
-		/* Cache disabled. */
-		return ngx_http_next_header_filter(r);
+	/* Make a copy, so that we don't act on the response header. */
+	u_char *tags = ngx_pstrdup(r->pool, &ngx_tags);
+	size_t tags_len = ngx_strlen(tags);
+
+	u_char *tag;
+	tag = ngx_palloc(r->pool, tags_len);
+	if (tag == NULL) {
+		return NGX_ERROR;
 	}
+
+	tag = (u_char *) strtok((char *) tags, " ");
+	while (tag != NULL) {
+		write_cache_tag_key(r, hmcf, tag, ngx_strlen(tag));
+		tag = (u_char*) strtok(NULL, " ");
+	}
+
+	return ngx_http_next_header_filter(r);
+}
+
+static ngx_int_t
+write_cache_tag_key(ngx_http_request_t *r,
+		    ngx_http_tagpurge_main_conf_t *hmcf,
+		    u_char *tag,
+		    size_t tag_len)
+{
+	u_char *cache_key;
 
 	cache_key = ngx_palloc(r->pool, 32 + 1);
 	if (cache_key == NULL) {
@@ -114,7 +144,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		return NGX_ERROR;
 	}
 
-	file->name.len = hmcf->cache_path->name.len + 1 + tag.len;
+	file->name.len = hmcf->cache_path->name.len + 1 + tag_len;
 
 	file->name.data = ngx_palloc(r->pool, file->name.len + 1);
 	if (file->name.data == NULL) {
@@ -127,7 +157,9 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 
 	(void) ngx_sprintf(file->name.data +
 			   hmcf->cache_path->name.len,
-			   "/%s", tag.data);
+			   "/%s", tag);
+
+	file->name.data[file->name.len] = '\0';
 
 	if (ngx_create_path(file, hmcf->cache_path) != NGX_OK) {
 		return NGX_ERROR;
@@ -170,7 +202,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 		return NGX_ERROR;
 	}
 
-	return ngx_http_next_header_filter(r);
+	return NGX_OK;
 }
 
 static ngx_int_t
