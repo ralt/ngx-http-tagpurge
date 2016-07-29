@@ -24,11 +24,11 @@ An nginx module to provide tag-based cache purging.
 
 ### Current state
 
-1. â
-2. â
-3. â
-4. â
-5. â
+1. ✓
+2. ✓
+3. ✓
+4. ❌
+5. ❌
 
 ### License
 
