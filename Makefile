@@ -37,4 +37,4 @@ vendor:
 .PHONY: tests
 
 tests:
-	sbcl --load tests/basic.lisp --quit
+	sbcl --disable-debugger --load tests/basic.lisp --quit
