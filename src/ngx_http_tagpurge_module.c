@@ -7,6 +7,13 @@
 
 ngx_module_t ngx_http_tagpurge_module;
 
+extern ngx_module_t ngx_http_proxy_module;
+
+typedef struct
+{
+	ngx_array_t *caches; /* ngx_http_file_cache_t */
+} ngx_http_proxy_main_conf_t;
+
 typedef struct
 {
 	ngx_str_t cache_tag_header;
@@ -84,7 +91,6 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 	}
 
 	ngx_http_tagpurge_main_conf_t *hmcf;
-
 	hmcf = ngx_http_get_module_main_conf(r,
 					     ngx_http_tagpurge_module);
 
@@ -128,15 +134,12 @@ write_cache_tag_key(ngx_http_request_t *r,
 		    u_char *tag,
 		    size_t tag_len)
 {
-	u_char *cache_key;
+	ngx_http_proxy_main_conf_t *pmcf;
+	pmcf = ngx_http_get_module_main_conf(r,
+					     ngx_http_proxy_module);
 
-	cache_key = ngx_palloc(r->pool, 32 + 1);
-	if (cache_key == NULL) {
-		return NGX_ERROR;
-	}
-
-	ngx_hex_dump(cache_key, r->cache->key, 32);
-	cache_key[32] = '\0';
+	ngx_http_file_cache_t *cache;
+	cache = pmcf->caches->elts;
 
 	ngx_file_t *file;
 	file = ngx_palloc(r->pool, sizeof(ngx_file_t));
@@ -161,10 +164,6 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 	file->name.data[file->name.len] = '\0';
 
-	if (ngx_create_path(file, hmcf->cache_path) != NGX_OK) {
-		return NGX_ERROR;
-	}
-
 	file->fd = ngx_open_file(file->name.data,
 				 NGX_FILE_RDWR,
 				 NGX_FILE_CREATE_OR_OPEN,
@@ -176,15 +175,38 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 	ssize_t n = 0;
 	for (;;) {
-		u_char *cache_key_line;
-		/* size of cache key + 1 for the newline. */
-		cache_key_line = ngx_palloc(r->pool, 32 + 1);
-		if (cache_key_line == NULL) {
+		u_char *cache_key;
+		/* +1 for newline and +1 for nul byte. */
+		size_t cache_key_len = cache->path->name.len + 1 +
+			cache->path->len +
+			2 * NGX_HTTP_CACHE_KEY_LEN + 1 + 1;
+
+		cache_key = ngx_palloc(r->pool, cache_key_len);
+		if (cache_key == NULL) {
 			return NGX_ERROR;
 		}
-		(void) ngx_sprintf(cache_key_line, "%s\n", cache_key);
 
-		n += ngx_write_fd(file->fd, cache_key_line, 32 + 1);
+		ngx_memcpy(cache_key,
+			   cache->path->name.data,
+			   cache->path->name.len);
+
+		u_char *p;
+		p = cache_key + cache->path->name.len + 1 +
+			cache->path->len;
+		p = ngx_hex_dump(p,
+				 r->cache->key,
+				 NGX_HTTP_CACHE_KEY_LEN);
+		*p = '\0';
+
+		ngx_create_hashed_filename(cache->path,
+					   cache_key,
+					   cache_key_len - 2);
+
+		cache_key[cache_key_len - 1] = '\n';
+
+		n += ngx_write_fd(file->fd,
+				  cache_key,
+				  cache_key_len);
 		if (n == -1 ){
 			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
 				      ngx_errno,
@@ -193,7 +215,7 @@ write_cache_tag_key(ngx_http_request_t *r,
 			return NGX_ERROR;
 		}
 
-		if ((size_t) n == 32 + 1) {
+		if ((size_t) n == cache_key_len) {
 			break;
 		}
 	}
