@@ -215,7 +215,7 @@ write_cache_tag_path(ngx_http_request_t *r,
 	}
 
 	ssize_t n;
-	u_char c;
+	char c;
 	size_t max_len = 4096;
 	u_char line[max_len];
 	size_t read_bytes = 0;
@@ -223,13 +223,15 @@ write_cache_tag_path(ngx_http_request_t *r,
 	size_t found = 0;
 
 	for (;;) {
-		n = ngx_read_file(file, &c, 1, read_bytes);
-		if (n == NGX_ERROR) {
+		/* ngx_read_file doesn't let you handle EOF
+		   properly. It accepts an u_char, which _can't_
+		   hold EOF, since its value is usually -1. */
+		n = read(file->fd, &c, 1);
+		if (n == -1) {
 			return NGX_ERROR;
 		}
 
-		if (n == 0) {
-			/* EOF */
+		if (n == 0 || c == EOF) {
 			break;
 		}
 
