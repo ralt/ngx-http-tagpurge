@@ -111,6 +111,11 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 
 	/* Make a copy, so that we don't act on the response header. */
 	u_char *tags = ngx_pstrdup(r->pool, &ngx_tags);
+
+	/* ngx_pstrdup is handy, but it doesn't put the NUL byte
+	   in dst. */
+	tags[ngx_tags.len] = '\0';
+
 	size_t tags_len = ngx_strlen(tags);
 
 	u_char *tag;
