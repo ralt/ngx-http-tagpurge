@@ -22,10 +22,10 @@ typedef struct
 
 static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
 static ngx_int_t
-write_cache_tag_key(ngx_http_request_t *r,
-		    ngx_http_tagpurge_main_conf_t *hmcf,
-		    u_char *tag,
-		    size_t tag_len);
+write_cache_tag_path(ngx_http_request_t *r,
+		     ngx_http_tagpurge_main_conf_t *hmcf,
+		     u_char *tag,
+		     size_t tag_len);
 
 /*
   Taken on: https://www.nginx.com/resources/wiki/start/topics/examples/headers_management/
@@ -121,7 +121,7 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 
 	tag = (u_char *) strtok((char *) tags, " ");
 	while (tag != NULL) {
-		write_cache_tag_key(r, hmcf, tag, ngx_strlen(tag));
+		write_cache_tag_path(r, hmcf, tag, ngx_strlen(tag));
 		tag = (u_char*) strtok(NULL, " ");
 	}
 
@@ -129,10 +129,10 @@ ngx_http_tagpurge_filter(ngx_http_request_t *r)
 }
 
 static ngx_int_t
-write_cache_tag_key(ngx_http_request_t *r,
-		    ngx_http_tagpurge_main_conf_t *hmcf,
-		    u_char *tag,
-		    size_t tag_len)
+write_cache_tag_path(ngx_http_request_t *r,
+		     ngx_http_tagpurge_main_conf_t *hmcf,
+		     u_char *tag,
+		     size_t tag_len)
 {
 	ngx_http_proxy_main_conf_t *pmcf;
 	pmcf = ngx_http_get_module_main_conf(r,
@@ -169,22 +169,22 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 	file->name.data[file->name.len] = '\0';
 
-	u_char *cache_key;
-	size_t cache_key_len = cache->path->name.len + 1 +
+	u_char *cache_path;
+	size_t cache_path_len = cache->path->name.len + 1 +
 		cache->path->len +
 		2 * NGX_HTTP_CACHE_KEY_LEN + 1;
 
-	cache_key = ngx_palloc(r->pool, cache_key_len);
-	if (cache_key == NULL) {
+	cache_path = ngx_palloc(r->pool, cache_path_len);
+	if (cache_path == NULL) {
 		return NGX_ERROR;
 	}
 
-	ngx_memcpy(cache_key,
+	ngx_memcpy(cache_path,
 		   cache->path->name.data,
 		   cache->path->name.len);
 
 	u_char *p;
-	p = cache_key + cache->path->name.len + 1 +
+	p = cache_path + cache->path->name.len + 1 +
 		cache->path->len;
 	p = ngx_hex_dump(p,
 			 r->cache->key,
@@ -192,12 +192,12 @@ write_cache_tag_key(ngx_http_request_t *r,
 	*p = '\0';
 
 	ngx_create_hashed_filename(cache->path,
-				   cache_key,
-				   cache_key_len - 1);
+				   cache_path,
+				   cache_path_len - 1);
 
 	/* The NUL byte isn't needed anymore, replace it
 	   with a newline. */
-	cache_key[cache_key_len - 1] = '\n';
+	cache_path[cache_path_len - 1] = '\n';
 
 	/* We only add the new cache key if it doesn't already exist. */
 	file->fd = ngx_open_file(file->name.data,
@@ -236,8 +236,8 @@ write_cache_tag_key(ngx_http_request_t *r,
 		}
 
 		if (ngx_strncmp(line,
-				cache_key,
-				cache_key_len) != 0) {
+				cache_path,
+				cache_path_len) != 0) {
 			/* Read the next line, reset read_bytes
 			   for line[read_bytes - 1] at the next
 			   iteration to work. */
@@ -271,8 +271,8 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 	for (;;) {
 		n = ngx_write_fd(file->fd,
-				 cache_key,
-				 cache_key_len);
+				 cache_path,
+				 cache_path_len);
 		if (n == -1) {
 			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
 				      ngx_errno,
@@ -283,7 +283,7 @@ write_cache_tag_key(ngx_http_request_t *r,
 
 		written_bytes += n;
 
-		if (written_bytes == cache_key_len) {
+		if (written_bytes == cache_path_len) {
 			break;
 		}
 	}
