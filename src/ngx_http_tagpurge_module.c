@@ -147,6 +147,11 @@ write_cache_tag_key(ngx_http_request_t *r,
 		return NGX_ERROR;
 	}
 
+	file->log = ngx_palloc(r->pool, sizeof(ngx_log_t));
+	if (file->log == NULL) {
+		return NGX_ERROR;
+	}
+
 	file->name.len = hmcf->cache_path->name.len + 1 + tag_len;
 
 	file->name.data = ngx_palloc(r->pool, file->name.len + 1);
@@ -194,9 +199,9 @@ write_cache_tag_key(ngx_http_request_t *r,
 	   with a newline. */
 	cache_key[cache_key_len - 1] = '\n';
 
-	/* Everything is ready to write the cache key to the file. */
+	/* We only add the new cache key if it doesn't already exist. */
 	file->fd = ngx_open_file(file->name.data,
-				 NGX_FILE_RDWR,
+				 NGX_FILE_RDONLY,
 				 NGX_FILE_CREATE_OR_OPEN,
 				 NGX_FILE_DEFAULT_ACCESS);
 
@@ -205,13 +210,70 @@ write_cache_tag_key(ngx_http_request_t *r,
 	}
 
 	ssize_t n;
-	size_t written = 0;
+	u_char c;
+	size_t max_len = 4096;
+	u_char line[max_len];
+	size_t read_bytes = 0;
+
+	size_t found = 0;
+
+	for (;;) {
+		n = ngx_read_file(file, &c, 1, read_bytes);
+		if (n == NGX_ERROR) {
+			return NGX_ERROR;
+		}
+
+		if (n == 0) {
+			/* EOF */
+			break;
+		}
+
+		read_bytes += n;
+		line[read_bytes - 1] = c;
+
+		if (c != 0x0a) {
+			continue;
+		}
+
+		if (ngx_strncmp(line,
+				cache_key,
+				cache_key_len) != 0) {
+			/* Read the next line, reset read_bytes
+			   for line[read_bytes - 1] at the next
+			   iteration to work. */
+			read_bytes = 0;
+			continue;
+		}
+
+		/* Cache key was found. */
+		found = 1;
+		break;
+	}
+
+	if (ngx_close_file(file->fd) == NGX_FILE_ERROR) {
+		return NGX_ERROR;
+	}
+
+	if (found) {
+		return NGX_OK;
+	}
+
+	file->fd = ngx_open_file(file->name.data,
+				 NGX_FILE_APPEND,
+				 NGX_FILE_CREATE_OR_OPEN,
+				 NGX_FILE_DEFAULT_ACCESS);
+
+	if (file->fd == NGX_INVALID_FILE) {
+		return NGX_ERROR;
+	}
+
+	size_t written_bytes = 0;
 
 	for (;;) {
 		n = ngx_write_fd(file->fd,
 				 cache_key,
 				 cache_key_len);
-		if (n == -1 ){
+		if (n == -1) {
 			ngx_log_error(NGX_LOG_ALERT, r->connection->log,
 				      ngx_errno,
 				      ngx_write_fd_n " \"%s\" failed",
@@ -219,9 +281,9 @@ write_cache_tag_key(ngx_http_request_t *r,
 			return NGX_ERROR;
 		}
 
-		written += n;
+		written_bytes += n;
 
-		if (written == cache_key_len) {
+		if (written_bytes == cache_key_len) {
 			break;
 		}
 	}
