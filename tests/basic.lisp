@@ -21,6 +21,10 @@
   (setf (hunchentoot:header-out "cache-tag") "foo baz")
   "Foo")
 
+(hunchentoot:define-easy-handler (bar :uri "/bar") ()
+  (setf (hunchentoot:header-out "cache-tag") "foo")
+  "Bar")
+
 (bordeaux-threads:make-thread
  (lambda ()
    (format t "Starting hunchentoot~%")
@@ -34,6 +38,8 @@
 
 (reset-directory (merge-pathnames "build/nginx/cache/" (uiop:getcwd)))
 (reset-directory (merge-pathnames "build/tagpurge/" (uiop:getcwd)))
+
+(delete-file (merge-pathnames "build/nginx/logs/error.log" (uiop:getcwd)))
 
 (djula:add-template-directory "tests/")
 (defparameter +nginx.conf+ (djula:compile-template* "nginx.conf"))
@@ -57,20 +63,20 @@
 (uiop:run-program "build/nginx/sbin/nginx")
 (format t "nginx started~%")
 
-(defvar *url* "http://localhost:8888")
-
 (test basic-test
   (is (string=
        "Hello"
-       (drakma:http-request *url*))))
+       (drakma:http-request "http://localhost:8888/"))))
 
-(test check-response-header
+(test simple-tag-creation
   (multiple-value-bind (response status headers)
-      (drakma:http-request *url*)
+      (drakma:http-request "http://localhost:8888/")
     (declare (ignore response status))
     (format t "~A~%" headers)
     (is (drakma:header-value :cache-tag headers) "bar")
-    (is-true (probe-file "build/tagpurge/bar")))
+    (is-true (probe-file "build/tagpurge/bar"))))
+
+(test two-tags-in-one-header
   (multiple-value-bind (response status headers)
       (drakma:http-request "http://localhost:8888/foo")
     (declare (ignore response status))
@@ -81,6 +87,17 @@
     (is (uiop:read-file-string "build/tagpurge/foo")
         (uiop:read-file-string "build/tagpurge/baz"))
     (is-true (probe-file (uiop:read-file-line "build/tagpurge/foo")))))
+
+(test another-url-for-same-tag
+  (multiple-value-bind (response status headers)
+      (drakma:http-request "http://localhost:8888/bar")
+    (declare (ignore response status))
+    (format t "~A~%" headers)
+    (is (drakma:header-value :cache-tag headers) "foo")
+    (is-true (probe-file "build/tagpurge/foo"))
+    (is-true (= 2
+                (length
+                 (uiop:read-file-lines "build/tagpurge/foo"))))))
 
 (run! :basic)
 (uiop:run-program "build/nginx/sbin/nginx -s stop")
