@@ -3,18 +3,25 @@ NGINX_FOLDER=vendor/nginx-$(NGINX_VERSION)
 SOURCES:=$(wildcard module/src/*.c) $(wildcard module/src/*.h) module/config
 PURGER_SOURCES:=$(wildcard purger/*.lisp) $(wildcard *.asd)
 PURGER_DEPS:=$(wildcard *.asd)
+ifdef CI
+	COMPRESS=
+else
+	COMPRESS=--compress-core
+endif
 
 all: build/nginx/sbin/nginx build/purger/tagpurge-http-api
 
-build/purger/tagpurge-http-api: $(PURGER_SOURCES) build/purger/deps build/purger/bin/buildapp build/purger/quicklocal/setup.lisp
+build/purger/tagpurge-http-api: $(PURGER_SOURCES) build/purger/deps build/purger/bin/buildapp build/purger/quicklocal/setup.lisp compress-core
 	./build/purger/bin/buildapp \
 		--asdf-tree build/purger/quicklocal/dists \
 		--asdf-path purger/ \
 		--load-system purger \
 		--eval '(setf *debugger-hook* (lambda (c h) (declare (ignore h)) (format t "~A~%" c) (uiop:quit -1)))' \
-		--compress-core \
+		$(COMPRESS) \
 		--output build/purger/tagpurge-http-api \
 		--entry purger:main
+
+compress-core:
 
 build/purger/deps: build/purger/quicklocal/setup.lisp $(PURGER_DEPS)
 	sbcl \
