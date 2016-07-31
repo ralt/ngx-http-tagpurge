@@ -1,6 +1,6 @@
 NGINX_VERSION=1.11.2
 NGINX_FOLDER=vendor/nginx-$(NGINX_VERSION)
-SOURCES:=$(wildcard src/*.c) $(wildcard src/*.h) config
+SOURCES:=$(wildcard module/src/*.c) $(wildcard module/src/*.h) module/config
 
 all: build/nginx/sbin/nginx
 
@@ -20,7 +20,7 @@ $(NGINX_FOLDER)/.configured: $(NGINX_FOLDER)
 		--conf-path=conf/nginx.conf \
 		--error-log-path=logs/error.log \
 		--http-log-path=logs/access.log \
-		--add-module=../..
+		--add-module=../../module
 	touch $@
 
 $(NGINX_FOLDER): vendor
