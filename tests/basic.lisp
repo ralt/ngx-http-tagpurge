@@ -74,7 +74,6 @@
   (multiple-value-bind (response status headers)
       (drakma:http-request "http://localhost:8888/")
     (declare (ignore response status))
-    (format t "~A~%" headers)
     (is (drakma:header-value :cache-tag headers) "bar")
     (is-true (probe-file "build/tagpurge/bar"))))
 
@@ -82,7 +81,6 @@
   (multiple-value-bind (response status headers)
       (drakma:http-request "http://localhost:8888/foo")
     (declare (ignore response status))
-    (format t "~A~%" headers)
     (is (drakma:header-value :cache-tag headers) "foo baz")
     (is-true (probe-file "build/tagpurge/foo"))
     (is-true (probe-file "build/tagpurge/baz"))
@@ -94,12 +92,24 @@
   (multiple-value-bind (response status headers)
       (drakma:http-request "http://localhost:8888/bar")
     (declare (ignore response status))
-    (format t "~A~%" headers)
     (is (drakma:header-value :cache-tag headers) "foo")
     (is-true (probe-file "build/tagpurge/foo"))
     (is-true (= 2
                 (length
                  (uiop:read-file-lines "build/tagpurge/foo"))))))
+
+#|
+(bordeaux-threads:make-thread
+ (lambda ()
+   (format t "Starting tagpurge-http-api~%")
+   (uiop:run-program "build/purger/tagpurge-http-api --port 6666 --tagpurge-folder build/tagpurge/" :output t :error-output t)))
+
+(test tagpurge-purge-tag
+  (let ((cache-file (uiop:read-file-line "build/tagpurge/foo")))
+    (is-true (probe-file cache-file))
+    (drakma:http-request "http://localhost:6666/?tags=foo")
+    (is-false (probe-file "build/tagpurge/foo"))
+    (is-false (probe-file cache-file))))|#
 
 (run! :basic)
 (uiop:run-program "build/nginx/sbin/nginx -s stop")
