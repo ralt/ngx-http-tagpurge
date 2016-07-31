@@ -1,0 +1,2 @@
+(defpackage #:purger
+  (:use #:cl))
