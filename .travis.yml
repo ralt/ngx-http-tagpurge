@@ -11,5 +11,5 @@ install:
   - curl https://raw.githubusercontent.com/luismbo/cl-travis/master/install.sh | sh
 
 script:
-  - make
+  - CI=1 make
   - make tests
