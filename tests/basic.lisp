@@ -39,7 +39,9 @@
 (reset-directory (merge-pathnames "build/nginx/cache/" (uiop:getcwd)))
 (reset-directory (merge-pathnames "build/tagpurge/" (uiop:getcwd)))
 
-(delete-file (merge-pathnames "build/nginx/logs/error.log" (uiop:getcwd)))
+(let ((error-log (merge-pathnames "build/nginx/logs/error.log" (uiop:getcwd))))
+  (when (probe-file error-log)
+    (delete-file error-log)))
 
 (djula:add-template-directory "tests/")
 (defparameter +nginx.conf+ (djula:compile-template* "nginx.conf"))
