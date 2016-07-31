@@ -18,6 +18,7 @@ typedef struct
 {
 	ngx_str_t cache_tag_header;
 	ngx_path_t *cache_path;
+	ngx_shmtx_t mutex;
 } ngx_http_tagpurge_main_conf_t;
 
 static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
@@ -204,6 +205,10 @@ write_cache_tag_path(ngx_http_request_t *r,
 	   with a newline. */
 	cache_path[cache_path_len - 1] = '\n';
 
+	ngx_shmtx_lock(&hmcf->mutex);
+
+	ngx_int_t rc;
+
 	/* We only add the new cache key if it doesn't already exist. */
 	file->fd = ngx_open_file(file->name.data,
 				 NGX_FILE_RDONLY,
@@ -211,14 +216,21 @@ write_cache_tag_path(ngx_http_request_t *r,
 				 NGX_FILE_DEFAULT_ACCESS);
 
 	if (file->fd == NGX_INVALID_FILE) {
-		return NGX_ERROR;
+		rc = NGX_ERROR;
+		goto unlock;
 	}
 
 	ssize_t n;
 	char c;
 	size_t max_len = 4096;
-	u_char line[max_len];
+	u_char *line;
 	size_t read_bytes = 0;
+
+	line = ngx_palloc(r->pool, max_len);
+	if (line == NULL) {
+		rc = NGX_ERROR;
+		goto unlock;
+	}
 
 	size_t found = 0;
 
@@ -228,7 +240,8 @@ write_cache_tag_path(ngx_http_request_t *r,
 		   hold EOF, since its value is usually -1. */
 		n = read(file->fd, &c, 1);
 		if (n == -1) {
-			return NGX_ERROR;
+			rc = NGX_ERROR;
+			goto unlock;
 		}
 
 		if (n == 0 || c == EOF) {
@@ -258,11 +271,13 @@ write_cache_tag_path(ngx_http_request_t *r,
 	}
 
 	if (ngx_close_file(file->fd) == NGX_FILE_ERROR) {
-		return NGX_ERROR;
+		rc = NGX_ERROR;
+		goto unlock;
 	}
 
 	if (found) {
-		return NGX_OK;
+		rc = NGX_OK;
+		goto unlock;
 	}
 
 	file->fd = ngx_open_file(file->name.data,
@@ -271,7 +286,8 @@ write_cache_tag_path(ngx_http_request_t *r,
 				 NGX_FILE_DEFAULT_ACCESS);
 
 	if (file->fd == NGX_INVALID_FILE) {
-		return NGX_ERROR;
+		rc = NGX_ERROR;
+		goto unlock;
 	}
 
 	size_t written_bytes = 0;
@@ -285,7 +301,8 @@ write_cache_tag_path(ngx_http_request_t *r,
 				      ngx_errno,
 				      ngx_write_fd_n " \"%s\" failed",
 				      file->name.data);
-			return NGX_ERROR;
+			rc = NGX_ERROR;
+			goto unlock;
 		}
 
 		written_bytes += n;
@@ -296,10 +313,16 @@ write_cache_tag_path(ngx_http_request_t *r,
 	}
 
 	if (ngx_close_file(file->fd) == NGX_FILE_ERROR) {
-		return NGX_ERROR;
+		rc = NGX_ERROR;
+		goto unlock;
 	}
 
-	return NGX_OK;
+	rc = NGX_OK;
+
+unlock:
+	ngx_shmtx_unlock(&hmcf->mutex);
+
+	return rc;
 }
 
 static ngx_int_t
@@ -318,6 +341,17 @@ ngx_http_tagpurge_create_main_conf(ngx_conf_t *cf)
 
 	hmcf = ngx_palloc(cf->pool, sizeof(ngx_http_tagpurge_main_conf_t));
 	if (hmcf == NULL) {
+		return NULL;
+	}
+
+	ngx_shmtx_sh_t *addr;
+	addr = ngx_palloc(cf->pool, sizeof(ngx_shmtx_sh_t));
+	if (addr == NULL) {
+		return NULL;
+	}
+
+	u_char *mutex_name = (u_char *) "tagpurge";
+	if (ngx_shmtx_create(&hmcf->mutex, addr, mutex_name) != NGX_OK) {
 		return NULL;
 	}
 
