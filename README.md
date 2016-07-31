@@ -27,7 +27,7 @@ An nginx module to provide tag-based cache purging.
 1. ✓
 2. ✓
 3. ✓
-4. ❌
+4. ✓
 5. ❌
 
 ### License
