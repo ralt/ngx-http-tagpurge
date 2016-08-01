@@ -22,13 +22,14 @@ An nginx module to provide tag-based cache purging.
 5. An HTTP API listens for tags to purge. When a tag is purged, all
    the paths specified in the tag file are deleted.
 
-### Current state
+### Known issues
 
-1. ✓
-2. ✓
-3. ✓
-4. ✓
-5. ❌
+- The lock used to write to files is maybe not shared across workers,
+  double check that.
+- The tests for the HTTP API don't pass because run-program somehow
+  exits immediately, although there's no error.
+- Write a comprehensive README and documentation.
+- Think about handling expired cache entries.
 
 ### License
 
