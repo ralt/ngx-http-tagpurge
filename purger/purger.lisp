@@ -8,7 +8,10 @@
     (with-open-file (f tag-file)
       (loop for line = (read-line f nil 'eof)
          until (eq line 'eof)
-         do (delete-file line)))
+         do (handler-case
+                (delete-file line)
+              ; Voluntarily ignore errors. The cache might be expired.
+              (error () nil))))
     (delete-file tag-file)))
 
 (hunchentoot:define-easy-handler (purge :uri "/") (tags)
